@@ -19,6 +19,12 @@
       "step": 1
     }
   },
+  "proxy": {
+    "description": "访问源站使用的代理（留空直连）",
+    "type": "string",
+    "default": "",
+    "hint": "服务器访问不了 kkrb.net 时填写，如 http://127.0.0.1:7890 或 socks5://127.0.0.1:1080"
+  },
   "fallback_on_error": {
     "description": "抓取失败时返回上一次成功缓存的数据",
     "type": "bool",

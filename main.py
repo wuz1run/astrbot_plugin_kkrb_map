@@ -68,7 +68,8 @@ class KkrbMapPlugin(star.Star):
 
             try:
                 items = await fetch_passwords(
-                    timeout=float(self.config.get("request_timeout", 15))
+                    timeout=float(self.config.get("request_timeout", 15)),
+                    proxy=(str(self.config.get("proxy") or "").strip() or None),
                 )
             except KkrbError as exc:
                 logger.warning(f"[kkrb_map] 抓取失败：{exc}")

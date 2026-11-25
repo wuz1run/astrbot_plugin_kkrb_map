@@ -103,24 +103,40 @@ def _parse(payload: dict) -> list[MapPassword]:
     return items
 
 
-async def _fetch_once(timeout: float) -> list[MapPassword]:
+def _describe(exc: BaseException) -> str:
+    """httpx 的超时异常 str() 常为空，这里补上类型名便于排查。"""
+    detail = str(exc).strip()
+    return f"{type(exc).__name__}: {detail}" if detail else type(exc).__name__
+
+
+async def _fetch_once(timeout: float, proxy: str | None = None) -> list[MapPassword]:
     headers = {
         "User-Agent": UA,
         "X-Requested-With": "XMLHttpRequest",
         "Referer": BASE_URL + PAGE_PATH,
         "Accept": "application/json, text/javascript, */*; q=0.01",
     }
-    async with httpx.AsyncClient(
-        base_url=BASE_URL,
-        headers=headers,
-        timeout=timeout,
-        follow_redirects=True,
-    ) as client:
+    client_kwargs: dict = {
+        "base_url": BASE_URL,
+        "headers": headers,
+        # 连接阶段单独限时，避免 DNS/握手卡住整体超时
+        "timeout": httpx.Timeout(timeout, connect=min(timeout, 10.0)),
+        "follow_redirects": True,
+    }
+    if proxy:
+        # httpx>=0.26 用 proxy=，更早的版本用 proxies=
+        try:
+            client = httpx.AsyncClient(proxy=proxy, **client_kwargs)
+        except TypeError:
+            client = httpx.AsyncClient(proxies=proxy, **client_kwargs)
+    else:
+        client = httpx.AsyncClient(**client_kwargs)
+    async with client as client:
         try:
             page = await client.get(PAGE_PATH)
             page.raise_for_status()
         except httpx.HTTPError as exc:
-            raise KkrbError(f"访问站点失败：{exc}") from exc
+            raise KkrbError(f"访问站点失败：{_describe(exc)}") from exc
 
         csrf = client.cookies.get("csrf_token")
         if not csrf:
@@ -152,12 +168,14 @@ async def _fetch_once(timeout: float) -> list[MapPassword]:
         return _parse(payload)
 
 
-async def fetch_passwords(timeout: float = 15.0, retries: int = 1) -> list[MapPassword]:
+async def fetch_passwords(
+    timeout: float = 15.0, retries: int = 1, proxy: str | None = None
+) -> list[MapPassword]:
     """抓取今日地图密码，失败时用新会话重试一次。"""
     last_exc: Exception | None = None
     for _ in range(retries + 1):
         try:
-            return await _fetch_once(timeout)
+            return await _fetch_once(timeout, proxy)
         except KkrbError as exc:
             last_exc = exc
     assert last_exc is not None

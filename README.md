@@ -46,6 +46,7 @@ AZ3：5751
 | `command_enable` | `true` | 是否启用指令 |
 | `include_source` | `true` | 回复末尾是否带来源 |
 | `request_timeout` | `15` | 请求源站超时（秒） |
+| `proxy` | 空 | 服务器访问不到源站时填代理，如 `http://127.0.0.1:7890` |
 | `fallback_on_error` | `true` | 失败时返回旧缓存 |
 
 ## 注意
