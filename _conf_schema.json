@@ -1,0 +1,27 @@
+{
+  "command_enable": {
+    "description": "启用 /地图密码 指令",
+    "type": "bool",
+    "default": true
+  },
+  "include_source": {
+    "description": "回复末尾附带数据来源",
+    "type": "bool",
+    "default": true
+  },
+  "request_timeout": {
+    "description": "请求源站超时（秒）",
+    "type": "int",
+    "default": 15,
+    "slider": {
+      "min": 5,
+      "max": 60,
+      "step": 1
+    }
+  },
+  "fallback_on_error": {
+    "description": "抓取失败时返回上一次成功缓存的数据",
+    "type": "bool",
+    "default": true
+  }
+}
