@@ -19,7 +19,7 @@ from .kkrb import KkrbError, MapPassword, fetch_passwords, render, today
 PLUGIN_NAME = "astrbot_plugin_kkrb_map"
 
 
-@star.register(PLUGIN_NAME, "Wuzirun", "查询三角洲行动每日地图密码（数据来自 kkrb.net）", "v1.0.0", "")
+@star.register(PLUGIN_NAME, "Wuzirun", "查询三角洲行动每日地图密码（数据来自 kkrb.net）", "v1.0.1", "")
 class KkrbMapPlugin(star.Star):
     def __init__(self, context: star.Context, config: dict | None = None) -> None:
         super().__init__(context)
