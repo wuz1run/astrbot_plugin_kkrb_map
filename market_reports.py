@@ -187,3 +187,12 @@ async def query_market(
     result = await client.get(report.endpoint, allow_stale=allow_stale)
     rows = _rows(result, REGIONS[region] if report.regional else "")
     return _finish(_report_lines(report, rows, region, " ".join(parts), page), result, source)
+
+
+async def popular_choices(client: MarketClient, region: str, *, source: bool, allow_stale: bool) -> tuple[list[str], str]:
+    result = await client.get(REPORTS["热门"].endpoint, allow_stale=allow_stale)
+    names = [
+        name for row in _rows(result, REGIONS[region])
+        if isinstance(name := row.get("objectName"), str) and name.strip()
+    ]
+    return names, _finish([] if names else ["暂无热门物品。"], result, source)
