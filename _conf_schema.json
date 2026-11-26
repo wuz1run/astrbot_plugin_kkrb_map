@@ -4,6 +4,12 @@
     "type": "bool",
     "default": true
   },
+  "market_enable": {
+    "description": "启用 /交易行 和 /查价 指令",
+    "type": "bool",
+    "default": false,
+    "hint": "获得站方数据使用许可后开启。仅按需刷新，不进行后台轮询。"
+  },
   "include_source": {
     "description": "回复末尾附带数据来源",
     "type": "bool",

@@ -1,8 +1,4 @@
-"""三角洲行动每日地图密码插件。
-
-数据按北京时间每天最多抓取一次并缓存在插件数据目录，
-群友发送 `/地图密码` 时直接读缓存，避免频繁请求源站。
-"""
+"""三角洲行动每日地图密码与交易行查询插件。"""
 
 from __future__ import annotations
 
@@ -15,11 +11,13 @@ from astrbot.api import logger
 from astrbot.api.event import AstrMessageEvent, filter
 
 from .kkrb import KkrbError, MapPassword, fetch_passwords, render, today
+from .market import MarketClient, MarketError
+from .market_reports import query_market
 
 PLUGIN_NAME = "astrbot_plugin_kkrb_map"
 
 
-@star.register(PLUGIN_NAME, "Wuzirun", "查询三角洲行动每日地图密码（数据来自 kkrb.net）", "v1.0.1", "")
+@star.register(PLUGIN_NAME, "Wuzirun", "查询三角洲行动每日地图密码与交易行行情（数据来自 kkrb.net）", "v1.1.0", "")
 class KkrbMapPlugin(star.Star):
     def __init__(self, context: star.Context, config: dict | None = None) -> None:
         super().__init__(context)
@@ -27,6 +25,10 @@ class KkrbMapPlugin(star.Star):
         self.data_dir: Path = star.StarTools.get_data_dir(PLUGIN_NAME)
         self.cache_file: Path = self.data_dir / "cache.json"
         self._lock = asyncio.Lock()
+        self._market = MarketClient(timeout=float(self.config.get("request_timeout", 15)))
+
+    async def terminate(self) -> None:
+        await self._market.close()
 
     # ------------------------------------------------------------------
     # 缓存
@@ -101,3 +103,25 @@ class KkrbMapPlugin(star.Star):
         if stale:
             text += "\n（源站暂时不可用，返回的是上次成功抓取的结果）"
         yield event.plain_result(text)
+
+    async def _market_reply(self, event: AstrMessageEvent, *, quote: bool = False) -> str:
+        if not self.config.get("market_enable", False):
+            return "交易行未启用，请在获得数据使用许可后开启 market_enable。"
+        command = event.get_message_str().split(maxsplit=1)
+        text = command[1] if len(command) == 2 else ""
+        try:
+            return await query_market(
+                self._market, text, quote=quote,
+                source=bool(self.config.get("include_source", True)),
+                allow_stale=bool(self.config.get("fallback_on_error", True)),
+            )
+        except MarketError as exc:
+            return f"交易行查询失败：{exc}"
+
+    @filter.command("交易行")
+    async def market_query(self, event: AstrMessageEvent):
+        yield event.plain_result(await self._market_reply(event))
+
+    @filter.command("查价")
+    async def market_quote(self, event: AstrMessageEvent):
+        yield event.plain_result(await self._market_reply(event, quote=True))
