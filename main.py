@@ -19,7 +19,7 @@ from .market_reports import REGIONS, REPORTS, popular_choices, query_market
 PLUGIN_NAME = "astrbot_plugin_kkrb_map"
 
 
-@star.register(PLUGIN_NAME, "Wuzirun", "查询三角洲行动每日地图密码与交易行行情（数据来自 kkrb.net）", "v1.2.0", "")
+@star.register(PLUGIN_NAME, "Wuzirun", "查询三角洲行动每日地图密码与交易行行情（数据来自 kkrb.net）", "v1.2.1", "")
 class KkrbMapPlugin(star.Star):
     def __init__(self, context: star.Context, config: dict | None = None) -> None:
         super().__init__(context)
@@ -27,7 +27,8 @@ class KkrbMapPlugin(star.Star):
         self.data_dir: Path = star.StarTools.get_data_dir(PLUGIN_NAME)
         self.cache_file: Path = self.data_dir / "cache.json"
         self._lock = asyncio.Lock()
-        self._market = MarketClient(timeout=float(self.config.get("request_timeout", 15)))
+        self._proxy = str(self.config.get("proxy") or "").strip() if self.config.get("proxy_enable", False) else None
+        self._market = MarketClient(timeout=float(self.config.get("request_timeout", 15)), proxy=self._proxy)
 
     async def terminate(self) -> None:
         await self._market.close()
@@ -73,7 +74,7 @@ class KkrbMapPlugin(star.Star):
             try:
                 items = await fetch_passwords(
                     timeout=float(self.config.get("request_timeout", 15)),
-                    proxy=(str(self.config.get("proxy") or "").strip() or None),
+                    proxy=self._proxy,
                 )
             except KkrbError as exc:
                 logger.warning(f"[kkrb_map] 抓取失败：{exc}")

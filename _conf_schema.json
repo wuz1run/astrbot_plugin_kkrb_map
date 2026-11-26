@@ -25,11 +25,17 @@
       "step": 1
     }
   },
+  "proxy_enable": {
+    "description": "启用本插件的上游代理",
+    "type": "bool",
+    "default": false,
+    "hint": "仅影响本插件访问 kkrb.net；关闭时始终直连。"
+  },
   "proxy": {
-    "description": "访问源站使用的代理（留空直连）",
+    "description": "上游代理地址（固定出口）",
     "type": "string",
     "default": "",
-    "hint": "服务器访问不了 kkrb.net 时填写，如 http://127.0.0.1:7890 或 socks5://127.0.0.1:1080"
+    "hint": "填写供应商提供的 HTTP 或 SOCKS5 连接地址，不填 API 提取链接。开启代理后此项必填。"
   },
   "fallback_on_error": {
     "description": "抓取失败时返回上一次成功缓存的数据",

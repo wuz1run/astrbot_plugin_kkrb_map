@@ -13,6 +13,7 @@ from typing import Any
 import httpx
 
 from .kkrb import BASE_URL
+from .upstream import ProxyConfigError, source_client
 
 MARKET_PAGE = "/?viewpage=view%2Fmarket%2Fall_item_price_curve"
 SUGGEST_ENDPOINT = "/getIPCSuggestions"
@@ -49,8 +50,9 @@ class MarketResult:
 
 
 class MarketClient:
-    def __init__(self, timeout: float) -> None:
+    def __init__(self, timeout: float, *, proxy: str | None = None) -> None:
         self._timeout = httpx.Timeout(timeout, connect=min(timeout, 10.0))
+        self._proxy = proxy
         self._client: httpx.AsyncClient | None = None
         self._ready = False
         self._lock = asyncio.Lock()
@@ -104,12 +106,15 @@ class MarketClient:
 
     async def _fetch(self, endpoint: str, data: dict | None) -> MarketResult:
         if self._client is None:
-            self._client = httpx.AsyncClient(
-                base_url=BASE_URL,
-                headers={"User-Agent": "astrbot_plugin_kkrb_map/1.1", "Accept": "application/json, text/html"},
-                timeout=self._timeout,
-                trust_env=False,
-            )
+            try:
+                self._client = source_client(
+                    base_url=BASE_URL,
+                    headers={"User-Agent": "astrbot_plugin_kkrb_map/1.1", "Accept": "application/json, text/html"},
+                    timeout=self._timeout,
+                    proxy=self._proxy,
+                )
+            except ProxyConfigError as exc:
+                raise MarketError(str(exc)) from exc
         client = self._client
         try:
             if not self._ready:

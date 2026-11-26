@@ -13,6 +13,8 @@ from dataclasses import dataclass
 
 import httpx
 
+from .upstream import ProxyConfigError, source_client
+
 BASE_URL = "https://www.kkrb.net"
 PAGE_PATH = "/?viewpage=view%2Foverview"
 UA = (
@@ -35,6 +37,10 @@ MAP_NAMES: dict[str, str] = {
 
 class KkrbError(RuntimeError):
     """抓取失败（网络、鉴权握手或返回码异常）。"""
+
+
+class _SourceRefusal(KkrbError):
+    """站点明确拒绝，不重试。"""
 
 
 @dataclass(slots=True)
@@ -116,22 +122,14 @@ async def _fetch_once(timeout: float, proxy: str | None = None) -> list[MapPassw
         "Referer": BASE_URL + PAGE_PATH,
         "Accept": "application/json, text/javascript, */*; q=0.01",
     }
-    client_kwargs: dict = {
-        "base_url": BASE_URL,
-        "headers": headers,
-        # 连接阶段单独限时，避免 DNS/握手卡住整体超时
-        "timeout": httpx.Timeout(timeout, connect=min(timeout, 10.0)),
-        "follow_redirects": True,
-    }
-    if proxy:
-        # httpx>=0.26 用 proxy=，更早的版本用 proxies=
-        try:
-            client = httpx.AsyncClient(proxy=proxy, **client_kwargs)
-        except TypeError:
-            client = httpx.AsyncClient(proxies=proxy, **client_kwargs)
-    else:
-        client = httpx.AsyncClient(**client_kwargs)
-    async with client as client:
+    try:
+        client = source_client(
+            base_url=BASE_URL, headers=headers, proxy=proxy,
+            timeout=httpx.Timeout(timeout, connect=min(timeout, 10.0)),
+        )
+    except ProxyConfigError as exc:
+        raise _SourceRefusal(str(exc)) from exc
+    async with client:
         try:
             page = await client.get(PAGE_PATH)
             page.raise_for_status()
@@ -152,7 +150,7 @@ async def _fetch_once(timeout: float, proxy: str | None = None) -> list[MapPassw
         except (httpx.HTTPError, ValueError) as exc:
             raise KkrbError(f"初始化会话失败：{exc}") from exc
         if menu_payload.get("code") != 1:
-            raise KkrbError(f"初始化会话被拒绝：{menu_payload.get('msg', menu_payload)}")
+            raise _SourceRefusal(f"初始化会话被拒绝：{menu_payload.get('msg', menu_payload)}")
 
         try:
             resp = await client.post("/getOVData", data={"globalData": "false"}, headers=auth)
@@ -162,6 +160,8 @@ async def _fetch_once(timeout: float, proxy: str | None = None) -> list[MapPassw
             raise KkrbError(f"请求地图密码失败：{exc}") from exc
 
         if payload.get("code") != 1:
+            if payload.get("code") in (-101, -103, 303):
+                raise _SourceRefusal(f"站点拒绝地图密码查询（业务码 {payload['code']}）")
             raise KkrbError(
                 f"站点返回异常：code={payload.get('code')} msg={payload.get('msg')}"
             )
@@ -176,7 +176,13 @@ async def fetch_passwords(
     for _ in range(retries + 1):
         try:
             return await _fetch_once(timeout, proxy)
+        except _SourceRefusal:
+            raise
         except KkrbError as exc:
+            cause = exc.__cause__
+            if isinstance(cause, httpx.HTTPStatusError):
+                if cause.response.status_code in (401, 403, 429, 451) or cause.response.is_redirect:
+                    raise
             last_exc = exc
     assert last_exc is not None
     raise last_exc
